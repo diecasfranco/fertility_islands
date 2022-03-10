@@ -1,0 +1,982 @@
+##### Islands Protocol
+
+12 samples sequenced by pair-end approach, 100pb length. Quality is OK (from raw data, checked by FASTQC)
+
+#### Phyloflash
+#### This software use a mix between taxonomy classification (SILVA), mapping reads and reconstruction of 16S gene - Works with emirge on FSM only
+
+phyloFlash.pl -lib Bra3-1 -read1 ~/symbio/Diego/QC/Bra-3-1-A_1.fq.gz -read2 ~/symbio/Diego/QC/Bra-3-1-A_2.fq.gz -CPUs 40 -everything -taxlevel 8
+
+
+#### Assembly
+
+megahit -1 ~/symbio/Diego/QC/Tor-3-1-A_1.fq.gz -2 ~/symbio/Diego/QC/Tor-3-1-A_2.fq.gz --min-contig-len 1000 -m 0.85 -o Tor3 --out-prefix Tor3 -t 40 --k-max 255
+
+
+megahit -1 ~/symbio/Diego/QC/Tru-3-1-A_1.fq.gz -2 ~/symbio/Diego/QC/Tru-3-1-A_2.fq.gz --min-contig-len 1000 -m 0.85 -o Tru3 --out-prefix Tru3 -t 40 --k-max 255
+
+
+anvi-script-reformat-fasta Bra1.contigs.fa -o Bra1_contigs.fa --simplify-names --prefix Bra1 --report-file Bra1_contigs_info.txt
+
+bowtie2-build Bra1_contigs.fa contigs
+
+bowtie2 --threads 40 -x contigs -1 /home/diego.franco/symbio/Diego/QC/Bra-3-1-A_1.fq.gz -2 /home/diego.franco/symbio/Diego/QC/Bra-3-1-A_2.fq.gz --no-unal -S Bra3.sam
+
+bowtie2-build CALKRU_contigs.fa contigs
+bowtie2 --threads 40 -x contigs -1 ~/symbio/Diego/Quality_control/CALKRU-QUALITY_PASSED_R1.fastq -2 ~/symbio/Diego/Quality_control/CALKRU-QUALITY_PASSED_R2.fastq --no-unal -S CALKRU.sam
+samtools view -F 4 -bS -@ 30 CALKRU.sam > CALKRU-RAW.bam
+anvi-init-bam CALKRU-RAW.bam -o CALKRU.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f CALKRU_contigs.fa -o CALKRU.db -n 'Callodictya krueperi'
+anvi-run-hmms -c CALKRU.db -T 40
+anvi-run-pfams -c CALKRU.db -T 40
+anvi-get-sequences-for-gene-calls -c CALKRU.db -o CALKRU-gene-calls.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i CALKRU-gene-calls.fa -o CALKRU-gene-calls_nr.out -z 30 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i CALKRU-gene-calls_nr.out -o CALKRU-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-import-taxonomy-for-genes -i CALKRU-gene-calls_nr.names -c CALKRU.db -p kaiju
+centrifuge -f -x ~/symbio/software/centrifuge/centrifuge-1.0.3/p+h+v/p+h+v CALKRU-gene-calls.fa -S CALKRU-centrigue_hits.tsv --threads 20
+anvi-import-taxonomy-for-genes -c CALKRU.db -i CALKRU-centrifuge_report.tsv CALKRU-centrigue_hits.tsv -p centrifuge
+anvi-profile -i CALKRU.bam -c CALKRU.db --output-dir CALKRU_profile --sample-name CALKRU -T 40
+
+Assembled reads ...................: 3,553,844 / 44,140,692 (8.051%)
+Discarded reads ...................: 0 / 44,140,692 (0.000%)
+Not assembled reads ...............: 40,586,848 / 44,140,692 (91.949%)
+Assembled reads file...............: Bra1.assembled.fastq
+Discarded reads file...............: Bra1.discarded.fastq
+Unassembled forward reads file.....: Bra1.unassembled.forward.fastq
+Unassembled reverse reads file.....: Bra1.unassembled.reverse.fastq
+
+
+bbwrap.sh ref=islands/Bra1/Bra1_contigs.fa in=symbio/Diego/QC/Bra-1-1-A_1.fq.gz,symbio/Diego/QC/Bra-1-1-A_2.fq.gz out=islands/Bra1/Bra1.aln.sam.gz  kfilter=22 subfilter=15 maxindel=80
+
+bbwrap.sh ref=Bra2/Bra2_contigs.fa in=Bra-2-1.fq,Bra-2-2.fq  out=Bra2/Bra2.aln.sam.gz  kfilter=22 subfilter=15 maxindel=80 
+
+.{0,3}GTG[TC]CAGC[CA]GCCGCGGTAA
+
+.{0,3}ATTAGA[AT]ACCC[ACGT][ACGT]GTAGTCC
+
+GTGYCAGCMGCCGCGGTAA
+
+.{0,3}GTG[TC]CAGC[CA]GCCGCGGTAA; .{0,3}ATTAGA[AT]ACCC[ACGT][ACGT]GTAGTCC
+
+sed -E 's/.{0,3}GTG[TC]CAGC[CA]GCCGCGGTAA//; s/.{0,3}ATTAGA[AT]ACCC[ACGT][ACGT]GTAGTCC//' file1 > file2
+
+
+anvi-estimate-metabolism -c Tru3.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagen>
+
+
+anvi-run-kegg-kofams -c Tru3.db -T 40
+anvi-estimate-metabolism -c Tru3.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete -O Tru3_k>
+anvi-estimate-metabolism -c Tru3.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagen>
+ls
+cd Bra1
+anvi-run-kegg-kofams -c Bra1.db -T 60
+anvi-estimate-metabolism -c Bra1.db --kegg-output-modes modules_custom --custom-output-headers --metagenome-mode kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_>
+
+anvi-run-kegg-kofams -c Bra3.db -T 60
+anvi-estimate-metabolism -c Bra3.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O Bra3_kegg
+
+
+anvi-run-kegg-kofams -c C1.db -T 60
+anvi-estimate-metabolism -c C1.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O C1_kegg
+
+
+anvi-run-kegg-kofams -c C2.db -T 60
+anvi-estimate-metabolism -c C2.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O C2_kegg
+
+
+anvi-run-kegg-kofams -c C3.db -T 60
+anvi-estimate-metabolism -c C3.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O C3_kegg
+
+
+anvi-run-kegg-kofams -c Tru1.db -T 60
+anvi-estimate-metabolism -c Tru1.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O Tru1_kegg
+
+anvi-run-kegg-kofams -c Tru2.db -T 60
+anvi-estimate-metabolism -c Tru2.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O Tru2_kegg
+
+
+prokka C1_contigs.fa --outdir C1_prokka --prefix C1 --metagenome --cpus 60
+
+
+interproscan.sh -i Bra1_aa.fa -b ../Bra1_interproscan -f tsv,GFF3,SVG -pa KEGG
+
+interproscan.sh -i Bra3-aa.fa -b ../Bra3_interproscan -f tsv,GFF3,SVG -pa KEGG
+
+interproscan.sh -i Tor2-aa.fa -b ../Tor2_interproscan -f tsv,GFF3,SVG -pa KEGG
+
+
+kraken2 -db ~/symbio/db/kraken-db/ Bra2_contigs.fa --threads 40 --output bra2_kraken --use-names
+
+kraken2 -db ~/symbio/db/kraken-db/ Bra3_contigs.fa --threads 40 --output bra3_kraken --use-names
+
+kraken2 -db ~/symbio/db/kraken-db/ Tru1_contigs.fa --threads 40 --output Tru1_kraken --use-names
+
+kraken2 -db ~/symbio/db/kraken-db/ Tru2_contigs.fa --threads 40 --output Tru2_kraken --use-names
+
+kraken2 -db ~/symbio/db/kraken-db/ Tru3_contigs.fa --threads 40 --output Tru3_kraken --use-names
+
+kraken2 -db ~/symbio/db/kraken-db/ Tor1_contigs.fa --threads 40 --output Tor1_kraken --use-names
+
+kraken2 -db ~/symbio/db/kraken-db/ Tor2_contigs.fa --threads 40 --output Tor2_kraken --use-names
+
+kraken2 -db ~/symbio/db/kraken-db/ Tor3_contigs.fa --threads 40 --output Tor3_kraken --use-names
+
+kraken2 -db ~/symbio/db/kraken-db/ C1_contigs.fa --threads 40 --output C1_kraken --use-names
+
+kraken2 -db ~/symbio/db/kraken-db/ C2_contigs.fa --threads 40 --output C2_kraken --use-names
+
+kraken2 -db ~/symbio/db/kraken-db/ C3_contigs.fa --threads 40 --output C3_kraken --use-names
+
+
+kraken2 --paired --classified-out cseqs#.fq Bra1-QUALITY_PASSED_R1.fastq Bra1-QUALITY_PASSED_R2.fastq --threads 40 -db ~/symbio/db/kraken-db/ -output Bra1_kraken --use-names
+
+
+
+anvi-get-sequences-for-hmm-hits -c Bra1.db --hmm-source Ribosomal_RNA_28S -o Bra1_28S_euk.fasta
+
+
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+
+Wet Season
+
+
+conda activate base
+fastq-join Bra-1-1A_1.fq.gz Bra-1-1A_2.fq.gz -o fastq-join/W_Bra1_%.fastq -p 2
+
+phyloFlash.pl -lib W_Bra2 -read1 ~/symbio/Diego/Quality_control/Wet_season/Bra-2-1A_1.fq.gz -read2 ~/symbio/Diego/Quality_control/Wet_season/Bra-2-1A_2.fq.gz -CPUs 40 -everything -taxlevel 8
+
+
+diamond blastx -d ~/symbio/db/nr.dmnd -q W_Bra1.fastq -o W_Bra1.daa -f 100 -b 12 -c 1 --threads 40	No funciono con el arx concatenado
+
+Bra1 63606s Only forward 
+
+
+megahit -1 ~/symbio/Diego/Quality_control/Wet_season/Bra-1-1A_1.fq.gz -2 ~/symbio/Diego/Quality_control/Wet_season/Bra-1-1A_2.fq.gz --min-contig-len 1000 -m 0.85 -o W_Bra1 --out-prefix W_Bra1 -t 50 --k-max 255
+
+anvi-script-reformat-fasta W_Bra1.contigs.fa -o W_Bra1_contigs.fa --simplify-names --prefix W_Bra1 --report-file W_Bra1_contigs_info.txt
+
+bowtie2-build W_Bra1_contigs.fa contigs
+
+bowtie2 --threads 50 -x contigs -1 ../../raw_data/Bra-2-1A_1.fq.gz -2 ../../raw_data/Bra-2-1A_2.fq.gz --no-unal -S W_Bra2.sam
+
+anvi-get-sequences-for-gene-calls -c W_Bra1.db --get-aa -o W_Bra1-aa.fa
+kraken2 -db ~/symbio/db/kraken-db/ W_Bra1_contigs.fasta --threads 50 --output W_Bra1_kraken --use-names
+
+samtools view -F 4 -bS -@ 50 W_Bra2.sam > W_Bra2-RAW.bam
+anvi-init-bam W_Bra2-RAW.bam -o W_Bra2.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f W_Bra2_contigs.fa -o W_Bra2.db -n 'Wet season Brasil 2' -T 50
+anvi-run-hmms -c W_Bra2.db -T 50
+anvi-run-pfams -c W_Bra2.db -T 50
+anvi-get-sequences-for-gene-calls -c W_Bra2.db -o W_Bra2-gene-calls.fa
+anvi-get-sequences-for-gene-calls -c W_Bra2.db --get-aa-sequences -o W_Bra2_aa.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i W_Bra2-gene-calls.fa -o W_Bra2-gene-calls_nr.out -z 50 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i W_Bra2-gene-calls_nr.out -o CALKRU-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-run-kegg-kofams -c W_Bra2.db -T 50
+anvi-estimate-metabolism -c W_Bra2.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O W_Bra2_kegg
+kraken2 -db ~/symbio/db/kraken-db/ W_Bra2_contigs.fasta --threads 50 --output W_Bra2_kraken --use-names
+
+anvi-script-reformat-fasta W_Bra3.contigs.fa -o W_Bra3_contigs.fa --simplify-names --prefix W_Bra3 --report-file W_Bra3_contigs_info.txt
+bowtie2-build W_Bra3_contigs.fa contigs
+bowtie2 --threads 50 -x contigs -1 ../../raw_data/Bra-3-1A_1.fq.gz -2 ../../raw_data/Bra-3-1A_2.fq.gz --no-unal -S W_Bra3.sam
+samtools view -F 4 -bS -@ 50 W_Bra3.sam > W_Bra3-RAW.bam
+anvi-init-bam W_Bra3-RAW.bam -o W_Bra3.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f W_Bra3_contigs.fa -o W_Bra3.db -n 'Wet season Brasil 3' -T 50
+anvi-run-hmms -c W_Bra3.db -T 50
+anvi-run-pfams -c W_Bra3.db -T 50
+anvi-get-sequences-for-gene-calls -c W_Bra3.db -o W_Bra3-gene-calls.fa
+anvi-get-sequences-for-gene-calls -c W_Bra3.db --get-aa-sequences -o W_Bra3_aa.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i W_Bra3-gene-calls.fa -o W_Bra3-gene-calls_nr.out -z 50 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i W_Bra3-gene-calls_nr.out -o W_Bra3-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-run-kegg-kofams -c W_Bra3.db -T 50
+anvi-estimate-metabolism -c W_Bra3.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O W_Bra3_kegg
+kraken2 -db ~/symbio/db/kraken-db/ W_Bra3_contigs.fasta --threads 50 --output W_Bra3_kraken --use-names
+
+
+
+anvi-script-reformat-fasta W_C1.contigs.fa -o W_C1_contigs.fa --simplify-names --prefix W_C1 --report-file W_C1_contigs_info.txt
+bowtie2-build W_C1_contigs.fa contigs
+bowtie2 --threads 50 -x contigs -1 ../../raw_data/C-1-1A_1.fq.gz -2 ../../raw_data/C-1-1A_2.fq.gz --no-unal -S W_C1.sam
+samtools view -F 4 -bS -@ 50 W_C1.sam > W_C1-RAW.bam
+anvi-init-bam W_C1-RAW.bam -o W_C1.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f W_C1_contigs.fa -o W_C1.db -n 'Wet season Control 1' -T 50
+anvi-run-hmms -c W_C1.db -T 50
+anvi-run-pfams -c W_C1.db -T 50
+anvi-get-sequences-for-gene-calls -c W_C1.db -o W_C1-gene-calls.fa
+anvi-get-sequences-for-gene-calls -c W_C1.db --get-aa-sequences -o W_C1_aa.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i W_C1-gene-calls.fa -o W_C1-gene-calls_nr.out -z 50 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i W_C1-gene-calls_nr.out -o W_C1-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-run-kegg-kofams -c W_C1.db -T 50
+anvi-estimate-metabolism -c W_C1.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O W_C1_kegg
+kraken2 -db ~/symbio/db/kraken-db/ W_C1_contigs.fasta --threads 50 --output W_C1_kraken --use-names
+
+
+anvi-script-reformat-fasta W_C2.contigs.fa -o W_C2_contigs.fasta --simplify-names --prefix W_C2 --report-file W_C2_contigs_info.txt
+bowtie2-build W_C2_contigs.fasta contigs
+bowtie2 --threads 50 -x contigs -1 ../../raw_data/C-2-1A_1.fq.gz -2 ../../raw_data/C-2-1A_2.fq.gz --no-unal -S W_C2.sam
+samtools view -F 4 -bS -@ 50 W_C2.sam > W_C2-RAW.bam
+anvi-init-bam W_C2-RAW.bam -o W_C2.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f W_C2_contigs.fasta -o W_C2.db -n 'Wet season Control 2' -T 50
+anvi-run-hmms -c W_C2.db -T 50
+anvi-run-pfams -c W_C2.db -T 50
+anvi-get-sequences-for-gene-calls -c W_C2.db -o W_C2-gene-calls.fa
+anvi-get-sequences-for-gene-calls -c W_C2.db --get-aa-sequences -o W_C2_aa.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i W_C2-gene-calls.fa -o W_C2-gene-calls_nr.out -z 50 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i W_C2-gene-calls_nr.out -o W_C2-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-run-kegg-kofams -c W_C2.db -T 50
+anvi-estimate-metabolism -c W_C2.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O W_C2_kegg
+kraken2 -db ~/symbio/db/kraken-db/ W_C2_contigs.fasta --threads 50 --output W_C2_kraken --use-names
+
+
+anvi-script-reformat-fasta W_C3.contigs.fa -o W_C3_contigs.fasta --simplify-names --prefix W_C3 --report-file W_C3_contigs_info.txt
+bowtie2-build W_C3_contigs.fasta contigs
+bowtie2 --threads 50 -x contigs -1 ../../raw_data/C-3-1A_1.fq.gz -2 ../../raw_data/C-3-1A_2.fq.gz --no-unal -S W_C3.sam
+samtools view -F 4 -bS -@ 50 W_C3.sam > W_C3-RAW.bam
+anvi-init-bam W_C3-RAW.bam -o W_C3.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f W_C3_contigs.fasta -o W_C3.db -n 'Wet season Control 3' -T 50
+anvi-run-hmms -c W_C3.db -T 50
+anvi-run-pfams -c W_C3.db -T 50
+anvi-get-sequences-for-gene-calls -c W_C3.db -o W_C3-gene-calls.fa
+anvi-get-sequences-for-gene-calls -c W_C3.db --get-aa-sequences -o W_C3_aa.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i W_C3-gene-calls.fa -o W_C3-gene-calls_nr.out -z 50 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i W_C3-gene-calls_nr.out -o W_C3-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-run-kegg-kofams -c W_C3.db -T 50
+anvi-estimate-metabolism -c W_C3.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O W_C3_kegg
+kraken2 -db ~/symbio/db/kraken-db/ W_C3_contigs.fasta --threads 50 --output W_C3_kraken --use-names
+
+
+anvi-script-reformat-fasta W_Tru1.contigs.fa -o W_Tru1_contigs.fasta --simplify-names --prefix W_Tru1 --report-file W_Tru1_contigs_info.txt
+bowtie2-build W_Tru1_contigs.fasta contigs
+bowtie2 --threads 50 -x contigs -1 ../../raw_data/Tru-1-1A_1.fq.gz -2 ../../raw_data/Tru-1-1A_2.fq.gz --no-unal -S W_Tru1.sam
+samtools view -F 4 -bS -@ 50 W_Tru1.sam > W_Tru1-RAW.bam
+anvi-init-bam W_Tru1-RAW.bam -o W_Tru1.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f W_Tru1_contigs.fasta -o W_Tru1.db -n 'Wet season Trupillo 1' -T 50
+anvi-run-hmms -c W_Tru1.db -T 50
+anvi-run-pfams -c W_Tru1.db -T 50
+anvi-get-sequences-for-gene-calls -c W_Tru1.db -o W_Tru1-gene-calls.fa
+anvi-get-sequences-for-gene-calls -c W_Tru1.db --get-aa-sequences -o W_Tru1_aa.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i W_Tru1-gene-calls.fa -o W_Tru1-gene-calls_nr.out -z 50 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i W_Tru1-gene-calls_nr.out -o W_Tru1-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-run-kegg-kofams -c W_Tru1.db -T 50
+anvi-estimate-metabolism -c W_Tru1.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O W_Tru1_kegg
+kraken2 -db ~/symbio/db/kraken-db/ W_Tru1_contigs.fasta --threads 50 --output W_Tru1_kraken --use-names
+
+anvi-script-reformat-fasta W_Tru2.contigs.fasta -o W_Tru2_contigs.fasta --simplify-names --prefix W_Tru2 --report-file W_Tru2_contigs_info.txt
+bowtie2-build W_Tru2_contigs.fasta contigs
+bowtie2 --threads 50 -x contigs -1 ../../raw_data/Tru-2-1A_1.fq.gz -2 ../../raw_data/Tru-2-1A_2.fq.gz --no-unal -S W_Tru2.sam
+samtools view -F 4 -bS -@ 50 W_Tru2.sam > W_Tru2-RAW.bam
+anvi-init-bam W_Tru2-RAW.bam -o W_Tru2.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f W_Tru2_contigs.fasta -o W_Tru2.db -n 'Wet season Trupillo 2' -T 50
+anvi-run-hmms -c W_Tru2.db -T 50
+anvi-run-pfams -c W_Tru2.db -T 50
+anvi-get-sequences-for-gene-calls -c W_Tru2.db -o W_Tru2-gene-calls.fa
+anvi-get-sequences-for-gene-calls -c W_Tru2.db --get-aa-sequences -o W_Tru2_aa.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i W_Tru2-gene-calls.fa -o W_Tru2-gene-calls_nr.out -z 50 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i W_Tru2-gene-calls_nr.out -o W_Tru2-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-run-kegg-kofams -c W_Tru2.db -T 50
+anvi-estimate-metabolism -c W_Tru2.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O W_Tru2_kegg
+kraken2 -db ~/symbio/db/kraken-db/ W_Tru2_contigs.fasta --threads 50 --output W_Tru2_kraken --use-names
+
+anvi-script-reformat-fasta W_Tru3.contigs.fa -o W_Tru3_contigs.fasta --simplify-names --prefix W_Tru3 --report-file W_Tru3_contigs_info.txt
+bowtie2-build W_Tru3_contigs.fasta contigs
+bowtie2 --threads 50 -x contigs -1 ../../raw_data/Tru-3-1A_1.fq.gz -2 ../../raw_data/Tru-3-1A_2.fq.gz --no-unal -S W_Tru3.sam
+samtools view -F 4 -bS -@ 50 W_Tru3.sam > W_Tru3-RAW.bam
+anvi-init-bam W_Tru3-RAW.bam -o W_Tru3.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f W_Tru3_contigs.fasta -o W_Tru3.db -n 'Wet season Trupillo 3' -T 50
+anvi-run-hmms -c W_Tru3.db -T 50
+anvi-run-pfams -c W_Tru3.db -T 50
+anvi-get-sequences-for-gene-calls -c W_Tru3.db -o W_Tru3-gene-calls.fa
+anvi-get-sequences-for-gene-calls -c W_Tru3.db --get-aa-sequences -o W_Tru3_aa.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i W_Tru3-gene-calls.fa -o W_Tru3-gene-calls_nr.out -z 50 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i W_Tru3-gene-calls_nr.out -o W_Tru3-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-run-kegg-kofams -c W_Tru3.db -T 50
+anvi-estimate-metabolism -c W_Tru3.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O W_Tru3_kegg
+kraken2 -db ~/symbio/db/kraken-db/ W_Tru3_contigs.fasta --threads 50 --output W_Tru3_kraken --use-names
+
+
+anvi-script-reformat-fasta W_Tor1.contigs.fa -o W_Tor1_contigs.fasta --simplify-names --prefix W_Tor1 --report-file W_Tor1_contigs_info.txt
+bowtie2-build W_Tor1_contigs.fasta contigs
+bowtie2 --threads 50 -x contigs -1 ../../raw_data/Tor-1-1A_1.fq.gz -2 ../../raw_data/Tor-1-1A_2.fq.gz --no-unal -S W_Tor1.sam
+samtools view -F 4 -bS -@ 50 W_Tor1.sam > W_Tor1-RAW.bam
+anvi-init-bam W_Tor1-RAW.bam -o W_Tor1.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f W_Tor1_contigs.fasta -o W_Tor1.db -n 'Wet season Tor 1' -T 80
+anvi-run-hmms -c W_Tor1.db -T 50
+anvi-run-pfams -c W_Tor1.db -T 50
+anvi-get-sequences-for-gene-calls -c W_Tor1.db -o W_Tor1-gene-calls.fa
+anvi-get-sequences-for-gene-calls -c W_Tor1.db --get-aa-sequences -o W_Tor1_aa.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i W_Tor1-gene-calls.fa -o W_Tor1-gene-calls_nr.out -z 50 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i W_Tor1-gene-calls_nr.out -o W_Tor1-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-run-kegg-kofams -c W_Tor1.db -T 50
+anvi-estimate-metabolism -c W_Tor1.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O W_Tor1_kegg
+kraken2 -db ~/symbio/db/kraken-db/ W_Tor1_contigs.fasta --threads 50 --output W_Tor1_kraken --use-names
+
+
+anvi-script-reformat-fasta W_Tor2.contigs.fa -o W_Tor2_contigs.fasta --simplify-names --prefix W_Tor2 --report-file W_Tor2_contigs_info.txt
+bowtie2-build W_Tor2_contigs.fasta contigs
+bowtie2 --threads 50 -x contigs -1 ../../raw_data/Tor-2-1A_1.fq.gz -2 ../../raw_data/Tor-2-1A_2.fq.gz --no-unal -S W_Tor2.sam
+samtools view -F 4 -bS -@ 50 W_Tor2.sam > W_Tor2-RAW.bam
+anvi-init-bam W_Tor2-RAW.bam -o W_Tor2.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f W_Tor2_contigs.fasta -o W_Tor2.db -n 'Wet season Tor 2' -T 50
+anvi-run-hmms -c W_Tor2.db -T 50
+anvi-run-pfams -c W_Tor2.db -T 50
+anvi-get-sequences-for-gene-calls -c W_Tor2.db -o W_Tor2-gene-calls.fa
+anvi-get-sequences-for-gene-calls -c W_Tor2.db --get-aa-sequences -o W_Tor2_aa.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i W_Tor2-gene-calls.fa -o W_Tor2-gene-calls_nr.out -z 50 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i W_Tor2-gene-calls_nr.out -o W_Tor2-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-run-kegg-kofams -c W_Tor2.db -T 50
+anvi-estimate-metabolism -c W_Tor2.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O W_Tor2_kegg
+kraken2 -db ~/symbio/db/kraken-db/ W_Tor2_contigs.fasta --threads 50 --output W_Tor2_kraken --use-names
+
+anvi-script-reformat-fasta W_Tor3.contigs.fa -o W_Tor3_contigs.fasta --simplify-names --prefix W_Tor3 --report-file W_Tor3_contigs_info.txt
+bowtie2-build W_Tor3_contigs.fasta contigs
+bowtie2 --threads 50 -x contigs -1 ../../raw_data/Tor-3-1A_1.fq.gz -2 ../../raw_data/Tor-3-1A_2.fq.gz --no-unal -S W_Tor3.sam
+samtools view -F 4 -bS -@ 50 W_Tor3.sam > W_Tor3-RAW.bam
+anvi-init-bam W_Tor3-RAW.bam -o W_Tor3.bam
+rm *sam *bt2 *-RAW.bam
+anvi-gen-contigs-database -f W_Tor3_contigs.fasta -o W_Tor3.db -n 'Wet season Tor 3' -T 50
+anvi-run-hmms -c W_Tor3.db -T 50
+anvi-run-pfams -c W_Tor3.db -T 50
+anvi-get-sequences-for-gene-calls -c W_Tor3.db -o W_Tor3-gene-calls.fa
+anvi-get-sequences-for-gene-calls -c W_Tor3.db --get-aa-sequences -o W_Tor3_aa.fa
+kaiju -t ~/symbio/db/nodes.dmp -f ~/symbio/db/refseq/kaiju_db_refseq.fmi -i W_Tor3-gene-calls.fa -o W_Tor3-gene-calls_nr.out -z 50 -v
+kaiju-addTaxonNames -t ~/symbio/db/nodes.dmp -n ~/symbio/db/names.dmp -i W_Tor3-gene-calls_nr.out -o W_Tor3-gene-calls_nr.names -r superkingdom,phylum,order,class,family,genus,species
+anvi-run-kegg-kofams -c W_Tor3.db -T 50
+anvi-estimate-metabolism -c W_Tor3.db --kegg-output-modes modules_custom --custom-output-headers kegg_module,module_name,module_category,module_subcategory,kofam_hits_in_module,module_is_complete --metagenome-mode -O W_Tor3_kegg
+kraken2 -db ~/symbio/db/kraken-db/ W_Tor3_contigs.fasta --threads 50 --output W_Tor3_kraken --use-names
+
+
+
+###############################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
+
+azor - anvio-master 
+Kraken - Bracken taxonomy
+
+kraken2 -db ~/symbio/db/kraken-db/ Bra1_contigs.fasta --threads 50 --output Bra1_kraken.txt --use-names --report Bra1.kreport
+bracken -d ~/symbio/db/kraken-db/ -i Bra1.kreport -o Bra1.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ Bra2_contigs.fasta --threads 50 --output Bra2_kraken.txt --use-names --report Bra2.kreport
+bracken -d ~/symbio/db/kraken-db/ -i Bra2.kreport -o Bra2.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ Bra3_contigs.fa --threads 50 --output Bra3_kraken --use-names --report Bra3.kreport
+bracken -d ~/symbio/db/kraken-db/ -i Bra3.kreport -o Bra3.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ C1_contigs.fasta --threads 50 --output C1_kraken --use-names --report C1.kreport
+kraken2 -db ~/symbio/db/kraken-db/ C1_contigs.fa --threads 50 --output C1_kraken --use-names --report C1.kreport
+bracken -d ~/symbio/db/kraken-db/ -i C1.kreport -o C1.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ C2_contigs.fasta --threads 50 --output C2_kraken --use-names --report C2.kreport
+bracken -d ~/symbio/db/kraken-db/ -i C2.kreport -o C2.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ C3_contigs.fasta --threads 50 --output C3_kraken --use-names --report C3.kreport
+bracken -d ~/symbio/db/kraken-db/ -i C3.kreport -o C3.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ Tru1_contigs.fasta --threads 50 --output Tru1_kraken --use-names --report Tru1.kreport
+bracken -d ~/symbio/db/kraken-db/ -i Tru1.kreport -o Tru1.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ Tru2_contigs.fasta --threads 50 --output Tru2_kraken --use-names --report Tru2.kreport
+bracken -d ~/symbio/db/kraken-db/ -i Tru2.kreport -o Tru2.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ Tru3_contigs.fasta --threads 50 --output Tru3_kraken --use-names --report Tru3.kreport
+bracken -d ~/symbio/db/kraken-db/ -i Tru3.kreport -o Tru3.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ Tor1_contigs.fasta --threads 50 --output Tor1_kraken --use-names --report Tor1.kreport
+bracken -d ~/symbio/db/kraken-db/ -i Tor1.kreport -o Tor1.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ Tor2_contigs.fasta --threads 50 --output Tor2_kraken --use-names --report Tor2.kreport
+bracken -d ~/symbio/db/kraken-db/ -i Tor2.kreport -o Tor2.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ Tor3_contigs.fasta --threads 50 --output Tor3_kraken --use-names --report Tor3.kreport
+bracken -d ~/symbio/db/kraken-db/ -i Tor3.kreport -o Tor3.bracken -r 150 -l G
+
+
+
+
+kraken2 -db ~/symbio/db/kraken-db/ W_Bra2_contigs.fasta --threads 50 --output W_Bra2_kraken.txt --use-names --report W_Bra2.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_Bra2.kreport -o W_Bra2.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ W_Bra3_contigs.fa --threads 50 --output W_Bra3_kraken --use-names --report W_Bra3.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_Bra3.kreport -o W_Bra3.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ W_C1_contigs.fasta --threads 50 --output W_C1_kraken --use-names --report W_C1.kreport
+kraken2 -db ~/symbio/db/kraken-db/ W_C1_contigs.fa --threads 50 --output W_C1_kraken --use-names --report W_C1.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_C1.kreport -o W_C1.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ W_C2_contigs.fasta --threads 50 --output W_C2_kraken --use-names --report W_C2.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_C2.kreport -o W_C2.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ W_C3_contigs.fasta --threads 50 --output W_C3_kraken --use-names --report W_C3.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_C3.kreport -o W_C3.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ W_Tru1_contigs.fasta --threads 50 --output W_Tru1_kraken --use-names --report W_Tru1.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_Tru1.kreport -o W_Tru1.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ W_Tru2_contigs.fasta --threads 50 --output W_Tru2_kraken --use-names --report W_Tru2.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_Tru2.kreport -o W_Tru2.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ W_Tru3_contigs.fasta --threads 50 --output W_Tru3_kraken --use-names --report W_Tru3.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_Tru3.kreport -o W_Tru3.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ W_Tor1_contigs.fasta --threads 50 --output W_Tor1_kraken --use-names --report W_Tor1.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_Tor1.kreport -o W_Tor1.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ W_Tor2_contigs.fasta --threads 50 --output W_Tor2_kraken --use-names --report W_Tor2.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_Tor2.kreport -o W_Tor2.bracken -r 150 -l G
+
+kraken2 -db ~/symbio/db/kraken-db/ W_Tor3_contigs.fasta --threads 50 --output W_Tor3_kraken --use-names --report W_Tor3.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_Tor3.kreport -o W_Tor3.bracken -r 150 -l G
+
+
+
+
+
+
+#######################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
+
+
+
+
+MAGS
+
+CONCOCT (conda activate concoct)
+
+cut_up_fasta.py Bra3_contigs.fa -c 10000 -o 0 --merge_last -b Bra3_10k_contigs.bed > Bra3_10k_contigs.fasta
+concoct_coverage_table.py Bra3_10k_contigs.bed Bra3.bam > Bra3_cov_table.tsv
+concoct --composition_file Bra3_10k_contigs.fasta --coverage_file Bra3_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py C1_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py C1_contigs.fa -c 10000 -o 0 --merge_last -b C1_10k_contigs.bed > C1_10k_contigs.fasta
+concoct_coverage_table.py C1_10k_contigs.bed C1.bam > C1_cov_table.tsv
+concoct --composition_file C1_10k_contigs.fasta --coverage_file C1_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py C1_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py C2_contigs.fa -c 10000 -o 0 --merge_last -b C2_10k_contigs.bed > C2_10k_contigs.fasta
+concoct_coverage_table.py C2_10k_contigs.bed C2.bam > C2_cov_table.tsv
+concoct --composition_file C2_10k_contigs.fasta --coverage_file C2_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py C2_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py C3_contigs.fa -c 10000 -o 0 --merge_last -b C3_10k_contigs.bed > C3_10k_contigs.fasta
+concoct_coverage_table.py C3_10k_contigs.bed C3.bam > C3_cov_table.tsv
+concoct --composition_file C3_10k_contigs.fasta --coverage_file C3_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py C3_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py Tor1_contigs.fa -c 10000 -o 0 --merge_last -b Tor1_10k_contigs.bed > Tor1_10k_contigs.fasta
+concoct_coverage_table.py Tor1_10k_contigs.bed Tor1.bam > Tor1_cov_table.tsv
+concoct --composition_file Tor1_10k_contigs.fasta --coverage_file Tor1_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py Tor1_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py Tor2_contigs.fa -c 10000 -o 0 --merge_last -b Tor2_10k_contigs.bed > Tor2_10k_contigs.fasta
+concoct_coverage_table.py Tor2_10k_contigs.bed Tor2.bam > Tor2_cov_table.tsv
+concoct --composition_file Tor2_10k_contigs.fasta --coverage_file Tor2_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py Tor2_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py Tor3_contigs.fa -c 10000 -o 0 --merge_last -b Tor3_10k_contigs.bed > Tor3_10k_contigs.fasta
+concoct_coverage_table.py Tor3_10k_contigs.bed Tor3.bam > Tor3_cov_table.tsv
+concoct --composition_file Tor3_10k_contigs.fasta --coverage_file Tor3_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py Tor3_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py Tru1_contigs.fa -c 10000 -o 0 --merge_last -b Tru1_10k_contigs.bed > Tru1_10k_contigs.fasta
+concoct_coverage_table.py Tru1_10k_contigs.bed Tru1.bam > Tru1_cov_table.tsv
+concoct --composition_file Tru1_10k_contigs.fasta --coverage_file Tru1_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py Tru1_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py Tru2_contigs.fa -c 10000 -o 0 --merge_last -b Tru2_10k_contigs.bed > Tru2_10k_contigs.fasta
+concoct_coverage_table.py Tru2_10k_contigs.bed Tru2.bam > Tru2_cov_table.tsv
+concoct --composition_file Tru2_10k_contigs.fasta --coverage_file Tru2_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py Tru2_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py Tru3_contigs.fa -c 10000 -o 0 --merge_last -b Tru3_10k_contigs.bed > Tru3_10k_contigs.fasta
+concoct_coverage_table.py Tru3_10k_contigs.bed Tru3.bam > Tru3_cov_table.tsv
+concoct --composition_file Tru3_10k_contigs.fasta --coverage_file Tru3_cov_table.tsv -b concoct_output/
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py Tru3_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+
+
+
+METABAT2 (conda activate metabat2)
+
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt *.bam
+
+runMetaBat.sh C1_contigs.fa C1.bam
+runMetaBat.sh C2_contigs.fa C2.bam
+runMetaBat.sh C3_contigs.fa C3.bam
+runMetaBat.sh Bra1_contigs.fa Bra1.bam
+runMetaBat.sh Bra2_contigs.fa Bra2.bam
+runMetaBat.sh Bra3_contigs.fa Bra3.bam
+runMetaBat.sh Tor1_contigs.fa Tor1.bam
+runMetaBat.sh Tor2_contigs.fa Tor2.bam
+runMetaBat.sh Tor3_contigs.fa Tor3.bam
+runMetaBat.sh Tru1_contigs.fa Tru1.bam
+runMetaBat.sh Tru2_contigs.fa Tru2.bam
+runMetaBat.sh Tru3_contigs.fa Tru3.bam
+
+
+MAXBIN2 (conda activate metawrap)
+
+run_MaxBin.pl -contig Bra2_contigs.fa -reads ../Bra-2-1-A_1.fq.gz -reads2 ../Bra-2-1-A_2.fq.gz -out maxbin_output -thread 40
+
+
+DASTOOLS
+
+DAS_Tool -i Tru1_concoct_scaffolds2bin.tsv,Tru1_maxbin_scaffolds2bin.tsv,Tru1_metabat_scaffolds2bin.tsv -c Tru1_contigs.fa -o dastools/Tru1_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5
+Tru1_concoct_scaffolds2bin.tsv 
+DAS_Tool -i Tor3_concoct_scaffolds2bin.tsv,Tor3_maxbin_scaffolds2bin.tsv,Tor3_metabat_scaffolds2bin.tsv -c Tor3_contigs.fa -o dastools/Tor3_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > Tru2_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > Tru2_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > Tru_metabat_scaffolds.tsv
+
+DAS_Tool -i Tru2_concoct_scaffolds2bin.tsv,Tru2_maxbin_scaffolds2bin.tsv,Tru2_metabat_scaffolds2bin.tsv -c Tru2_contigs.fa -o dastools/Tru2_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5
+
+
+DAS_Tool -i Tru3_concoct_scaffolds2bin.tsv,Tru3_maxbin_scaffolds2bin.tsv,Tru3_metabat_scaffolds2bin.tsv -c Tru3_contigs.fa -o dastools/Tru3_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins 1
+
+
+CHECKM (used with dastools output)
+
+On azor use <conda activate Dastool>
+
+checkm lineage_wf -t 10 -x fa ./ checkm_results/ -f checkm_out.txt
+
+
+GTDB-TK
+gtdbtk classify_wf --genome_dir Bra1_bin_DASTool_bins/ --out_dir gtdbtk_results --cpus 30 -x fasta
+
+########################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
+
+Wet Season
+
+
+cut_up_fasta.py W_Bra1_contigs.fasta -c 10000 -o 0 --merge_last -b W_Bra1_10k_contigs.bed > W_Bra1_10k_contigs.fasta
+concoct_coverage_table.py W_Bra1_10k_contigs.bed W_Bra1.bam > W_Bra1_cov_table.tsv
+concoct --composition_file W_Bra1_10k_contigs.fasta --coverage_file W_Bra1_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_Bra1_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py W_Bra2_contigs.fasta -c 10000 -o 0 --merge_last -b W_Bra2_10k_contigs.bed > W_Bra2_10k_contigs.fasta
+concoct_coverage_table.py W_Bra2_10k_contigs.bed W_Bra2.bam > W_Bra2_cov_table.tsv
+concoct --composition_file W_Bra2_10k_contigs.fasta --coverage_file W_Bra2_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_Bra2_contigs.fasta concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py W_Bra3_contigs.fa -c 10000 -o 0 --merge_last -b W_Bra3_10k_contigs.bed > W_Bra3_10k_contigs.fasta
+concoct_coverage_table.py W_Bra3_10k_contigs.bed W_Bra3.bam > W_Bra3_cov_table.tsv
+concoct --composition_file W_Bra3_10k_contigs.fasta --coverage_file W_Bra3_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_Bra3_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py W_C1_contigs.fa -c 10000 -o 0 --merge_last -b W_C1_10k_contigs.bed > W_C1_10k_contigs.fasta
+concoct_coverage_table.py W_C1_10k_contigs.bed W_C1.bam > W_C1_cov_table.tsv
+concoct --composition_file W_C1_10k_contigs.fasta --coverage_file W_C1_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_C1_contigs.fa concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py W_C2_contigs.fasta -c 10000 -o 0 --merge_last -b W_C2_10k_contigs.bed > W_C2_10k_contigs.fasta
+concoct_coverage_table.py W_C2_10k_contigs.bed W_C2.bam > W_C2_cov_table.tsv
+concoct --composition_file W_C2_10k_contigs.fasta --coverage_file W_C2_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_C2_contigs.fasta concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py W_C3_contigs.fasta -c 10000 -o 0 --merge_last -b W_C3_10k_contigs.bed > W_C3_10k_contigs.fasta
+concoct_coverage_table.py W_C3_10k_contigs.bed W_C3.bam > W_C3_cov_table.tsv
+concoct --composition_file W_C3_10k_contigs.fasta --coverage_file W_C3_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_C3_contigs.fasta concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py W_Tor1_contigs.fasta -c 10000 -o 0 --merge_last -b W_Tor1_10k_contigs.bed > W_Tor1_10k_contigs.fasta
+concoct_coverage_table.py W_Tor1_10k_contigs.bed W_Tor1.bam > W_Tor1_cov_table.tsv
+concoct --composition_file W_Tor1_10k_contigs.fasta --coverage_file W_Tor1_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_Tor1_contigs.fasta concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py W_Tor2_contigs.fasta -c 10000 -o 0 --merge_last -b W_Tor2_10k_contigs.bed > W_Tor2_10k_contigs.fasta
+concoct_coverage_table.py W_Tor2_10k_contigs.bed W_Tor2.bam > W_Tor2_cov_table.tsv
+concoct --composition_file W_Tor2_10k_contigs.fasta --coverage_file W_Tor2_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_Tor2_contigs.fasta concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py W_Tor3_contigs.fasta -c 10000 -o 0 --merge_last -b W_Tor3_10k_contigs.bed > W_Tor3_10k_contigs.fasta
+concoct_coverage_table.py W_Tor3_10k_contigs.bed W_Tor3.bam > W_Tor3_cov_table.tsv
+concoct --composition_file W_Tor3_10k_contigs.fasta --coverage_file W_Tor3_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_Tor3_contigs.fasta concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py W_Tru1_contigs.fasta -c 10000 -o 0 --merge_last -b W_Tru1_10k_contigs.bed > W_Tru1_10k_contigs.fasta
+concoct_coverage_table.py W_Tru1_10k_contigs.bed W_Tru1.bam > W_Tru1_cov_table.tsv
+concoct --composition_file W_Tru1_10k_contigs.fasta --coverage_file W_Tru1_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_Tru1_contigs.fasta concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py W_Tru2_contigs.fasta -c 10000 -o 0 --merge_last -b W_Tru2_10k_contigs.bed > W_Tru2_10k_contigs.fasta
+concoct_coverage_table.py W_Tru2_10k_contigs.bed W_Tru2.bam > W_Tru2_cov_table.tsv
+concoct --composition_file W_Tru2_10k_contigs.fasta --coverage_file W_Tru2_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_Tru2_contigs.fasta concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+cut_up_fasta.py W_Tru3_contigs.fasta -c 10000 -o 0 --merge_last -b W_Tru3_10k_contigs.bed > W_Tru3_10k_contigs.fasta
+concoct_coverage_table.py W_Tru3_10k_contigs.bed W_Tru3.bam > W_Tru3_cov_table.tsv
+concoct --composition_file W_Tru3_10k_contigs.fasta --coverage_file W_Tru3_cov_table.tsv -b concoct_output/ --threads 40
+merge_cutup_clustering.py concoct_output/clustering_gt1000.csv > concoct_output/clustering_merged.csv
+mkdir concoct_output/fasta_bins
+extract_fasta_bins.py W_Tru3_contigs.fasta concoct_output/clustering_merged.csv --output_path concoct_output/fasta_bins
+
+
+jgi_summarize_bam_contig_depths W_Bra1.bam
+metabat2 -i W_Bra1_contigs.fasta -a W_Bra1_contigs.fasta.depth.txt -o metabat_results
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt W_Bra2.bam
+metabat2 -i W_Bra2_contigs.fa -a metabat2_depth.txt -o metabat_results/W_Bra2
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt W_Bra3.bam
+metabat2 -i W_Bra3_contigs.fa -a metabat2_depth.txt -o metabat_results/W_Bra3
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt W_C1.bam
+metabat2 -i W_C1_contigs.fa -a metabat2_depth.txt -o metabat_results/W_C1
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt W_C2.bam
+metabat2 -i W_C2_contigs.fasta -a metabat2_depth.txt -o metabat_results/W_C2
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt W_C3.bam
+metabat2 -i W_C3_contigs.fa -a metabat2_depth.txt -o metabat_results/W_C3
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt W_Tor1.bam
+metabat2 -i W_Tor1_contigs.fa -a metabat2_depth.txt -o metabat_results/W_Tor1
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt W_Tor2.bam
+metabat2 -i W_Tor2_contigs.fasta -a metabat2_depth.txt -o metabat_results/W_Tor2
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt W_Tor3.bam
+metabat2 -i W_Tor3_contigs.fasta -a metabat2_depth.txt -o metabat_results/W_Tor3
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt W_Tru1.bam
+metabat2 -i W_Tru1_contigs.fasta -a metabat2_depth.txt -o metabat_results/W_Tru1
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt W_Tru2.bam
+metabat2 -i W_Tru2_contigs.fasta -a metabat2_depth.txt -o metabat_results/W_Tru2
+
+jgi_summarize_bam_contig_depths --outputDepth metabat2_depth.txt W_Tru3.bam
+metabat2 -i W_Tru3_contigs.fasta -a metabat2_depth.txt -o metabat_results/W_Tru3
+
+
+
+run_MaxBin.pl -contig Bra2_contigs.fa -reads ../Bra-2-1-A_1.fq.gz -reads2 ../Bra-2-1-A_2.fq.gz -out maxbin_output -thread 40
+
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > W_Bra2_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > W_Bra2_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > W_Bra2_metabat_scaffolds.tsv
+DAS_Tool -i W_Bra2_concoct_scaffolds2bin.tsv,maxbin_out/W_Bra2_maxbin_scaffolds2bin.tsv,metabat_results/W_Bra2_metabat_scaffolds.tsv -c W_Bra2_contigs.fasta -o dastools/W_Bra2_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins --write_unbinned
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > W_Bra3_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > W_Bra3_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > W_Bra3_metabat_scaffolds.tsv
+DAS_Tool -i W_Bra3_concoct_scaffolds2bin.tsv,maxbin_out/W_Bra3_maxbin_scaffolds2bin.tsv,metabat_results/W_Bra3_metabat_scaffolds.tsv -c W_Bra3_contigs.fasta -o dastools/W_Bra3_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins --write_unbinned
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > W_C1_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > W_C1_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > W_C1_metabat_scaffolds.tsv
+DAS_Tool -i W_C1_concoct_scaffolds2bin.tsv,maxbin_out/W_C1_maxbin_scaffolds2bin.tsv,metabat_results/W_C1_metabat_scaffolds.tsv -c W_C1_contigs.fasta -o dastools/W_C1_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins --write_unbinned
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > W_C2_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > W_C2_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > W_C2_metabat_scaffolds.tsv
+DAS_Tool -i W_C2_concoct_scaffolds2bin.tsv,maxbin_out/W_C2_maxbin_scaffolds2bin.tsv,metabat_results/W_C2_metabat_scaffolds.tsv -c W_C2_contigs.fasta -o dastools/W_C2_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins --write_unbinned
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > W_C3_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > W_C3_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > W_C3_metabat_scaffolds.tsv
+DAS_Tool -i W_C3_concoct_scaffolds2bin.tsv,maxbin_out/W_C3_maxbin_scaffolds2bin.tsv,metabat_results/W_C3_metabat_scaffolds.tsv -c W_C3_contigs.fasta -o dastools/W_C3_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins --write_unbinned
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > W_Tor1_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > W_Tor1_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > W_Tor1_metabat_scaffolds.tsv
+DAS_Tool -i W_Tor1_concoct_scaffolds2bin.tsv,maxbin_out/W_Tor1_maxbin_scaffolds2bin.tsv,metabat_results/W_Tor1_metabat_scaffolds.tsv -c W_Tor1_contigs.fasta -o dastools/W_Tor1_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins --write_unbinned
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > W_Tor2_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > W_Tor2_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > W_Tor2_metabat_scaffolds.tsv
+DAS_Tool -i W_Tor2_concoct_scaffolds2bin.tsv,maxbin_out/W_Tor2_maxbin_scaffolds2bin.tsv,metabat_results/W_Tor2_metabat_scaffolds.tsv -c W_Tor2_contigs.fasta -o dastools/W_Tor2_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins --write_unbinned
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > W_Tor3_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > W_Tor3_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > W_Tor3_metabat_scaffolds.tsv
+DAS_Tool -i W_Tor3_concoct_scaffolds2bin.tsv,maxbin_out/W_Tor3_maxbin_scaffolds2bin.tsv,metabat_results/W_Tor3_metabat_scaffolds.tsv -c W_Tor3_contigs.fasta -o dastools/W_Tor3_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins --write_unbinned
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > W_Tru1_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > W_Tru1_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > W_Tru1_metabat_scaffolds.tsv
+DAS_Tool -i W_Tru1_concoct_scaffolds2bin.tsv,maxbin_out/W_Tru1_maxbin_scaffolds2bin.tsv,metabat_results/W_Tru1_metabat_scaffolds.tsv -c W_Tru1_contigs.fasta -o dastools/W_Tru1_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins --write_unbinned
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > W_Tru2_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > W_Tru2_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > W_Tru2_metabat_scaffolds.tsv
+DAS_Tool -i W_Tru2_concoct_scaffolds2bin.tsv,maxbin_out/W_Tru2_maxbin_scaffolds2bin.tsv,metabat_results/W_Tru2_metabat_scaffolds.tsv -c W_Tru2_contigs.fasta -o dastools/W_Tru2_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins --write_unbinned
+
+perl -pe "s/,/\tconcoct./g;" concoct_output/clustering_merged.csv > W_Tru3_concoct_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fasta > W_Tru3_maxbin_scaffolds2bin.tsv
+Fasta_to_Scaffolds2Bin.sh -i ./ -e fa > W_Tru3_metabat_scaffolds.tsv
+DAS_Tool -i W_Tru3_concoct_scaffolds2bin.tsv,maxbin_out/W_Tru3_maxbin_scaffolds2bin.tsv,metabat_results/W_Tru3_metabat_scaffolds.tsv -c W_Tru3_contigs.fasta -o dastools/W_Tru3_bin --search_engine diamond -t 30 -l concoct,maxbin2,metabat --score_threshold 0.5 --write_bins --write_unbinned
+
+checkm lineage_wf -x fa -t 40 W_C1_bin_DASTool_bins/ checkm_results/
+
+blastn -query W_C1.006.fasta -db nt -outfmt '6 qseqid staxids bitscore std sscinames sskingdoms stitle' -evalue 1e-10 -task blastn -num_threads 40 -max_target_seqs 1 -max_hsps 1 > W_C1_006_blast.txt
+
+
+##### Kraken/Bracken
+conda activate anvio-master
+
+kraken2 -db ~/symbio/db/kraken-db/ W_Bra1_contigs.fasta --threads 50 --output W_Bra1.kraken --use-names --report W_Bra1.kreport
+bracken -d ~/symbio/db/kraken-db/ -i W_Bra1.kreport -o W_Bra1.bracken -t 50 -k 35 - 150
+bracken -d ~/symbio/db/kraken-db/ -i W_Bra1.kreport -o W_Bra1.bracken -r 150
+bracken -d ~/symbio/db/kraken-db/ -i W_Tor3.kreport -o W_Tor3.bracken -r 150 -l G
+
+
+### New KEGG modules app.
+
+anvi-estimate-metabolism -c W_Bra1.db --kegg-output-modes modules --metagenome-mode -O W_Br1_kegg_modules
+anvi-estimate-metabolism -c C3.db --kegg-output-modes modules --metagenome-mode -O C3_kegg_modules
+
+for file in *db; do
+    SampleName=`basename $file`
+    anvi-estimate-metabolism -c "$SampleName".db -O "$SampleName"_
+done
+
+#####################
+profiles for each bin
+for i in .fasta bowtie2-build C1_bin_1.fasta C1_bin_1
+
+
+for file in *fasta; do
+    SampleName=`basename $file`
+    bowtie2-build "$SampleName" "$SampleName"
+done
+
+
+for sample in `awk '{print $1}' samples.txt`
+do
+    if [ "$sample" == "sample" ]; then continue; fi
+samtools view -F 4 -bS $sample.sam > $sample-RAW.bam 
+anvi-init-bam $sample-RAW.bam -o $sample.bam -T 40
+done
+
+
+for sample in `awk '{print $1}' samples.txt`
+do
+    if [ "$sample" == "sample" ]; then continue; fi
+anvi-gen-contigs-database -f $sample.fasta -o $sample.db -n '$sample' -T 50
+done
+
+
+
+for sample in `awk '{print $1}' samples.txt`
+do
+    if [ "$sample" == "sample" ]; then continue; fi
+anvi-run-hmms --contigs-db $sample.db -T 20
+done
+
+for sample in `awk '{print $1}' samples.txt`
+do
+    if [ "$sample" == "sample" ]; then continue; fi
+anvi-run-scg-taxonomy --contigs-db $sample.db -T 20
+done
+
+
+bowtie2 --threads 50 -x C2_bin_1.fasta -1 ../dry_season/raw_data/C-2-1-A_1.fq.gz -2 ../dry_season/raw_data/C-2-1-A_2.fq.gz --no-unal -S C2_bin_1.sam
+bowtie2 --threads 50 -x C2_bin_2.fasta -1 ../dry_season/raw_data/C-2-1-A_1.fq.gz -2 ../dry_season/raw_data/C-2-1-A_2.fq.gz --no-unal -S C2_bin_2.sam
+bowtie2 --threads 50 -x C2_bin_3.fasta -1 ../dry_season/raw_data/C-2-1-A_1.fq.gz -2 ../dry_season/raw_data/C-2-1-A_2.fq.gz --no-unal -S C2_bin_3.sam
+bowtie2 --threads 50 -x C2_bin_4.fasta -1 ../dry_season/raw_data/C-2-1-A_1.fq.gz -2 ../dry_season/raw_data/C-2-1-A_2.fq.gz --no-unal -S C2_bin_4.sam
+bowtie2 --threads 50 -x C3_bin_1.fasta -1 ../dry_season/raw_data/C-3-1-A_1.fq.gz -2 ../dry_season/raw_data/C-3-1-A_2.fq.gz --no-unal -S C3_bin_1.sam
+bowtie2 --threads 50 -x C3_bin_2.fasta -1 ../dry_season/raw_data/C-3-1-A_1.fq.gz -2 ../dry_season/raw_data/C-3-1-A_2.fq.gz --no-unal -S C3_bin_2.sam
+bowtie2 --threads 50 -x C3_bin_3.fasta -1 ../dry_season/raw_data/C-3-1-A_1.fq.gz -2 ../dry_season/raw_data/C-3-1-A_2.fq.gz --no-unal -S C3_bin_3.sam
+bowtie2 --threads 50 -x C3_bin_4.fasta -1 ../dry_season/raw_data/C-3-1-A_1.fq.gz -2 ../dry_season/raw_data/C-3-1-A_2.fq.gz --no-unal -S C3_bin_4.sam
+
+bowtie2 --threads 50 -x Tor1_bin_1.fasta -1 ../dry_season/raw_data/Tor-1-1-A_1.fq.gz -2 ../dry_season/raw_data/Tor-1-1-A_2.fq.gz --no-unal -S Tor1_bin_1.sam
+bowtie2 --threads 50 -x Tor1_bin_2.fasta -1 ../dry_season/raw_data/Tor-1-1-A_1.fq.gz -2 ../dry_season/raw_data/Tor-1-1-A_2.fq.gz --no-unal -S Tor1_bin_2.sam
+bowtie2 --threads 50 -x Tor1_bin_3.fasta -1 ../dry_season/raw_data/Tor-1-1-A_1.fq.gz -2 ../dry_season/raw_data/Tor-1-1-A_2.fq.gz --no-unal -S Tor1_bin_3.sam
+
+bowtie2 --threads 50 -x Tor2_bin_1.fasta -1 ../dry_season/raw_data/Tor-2-1-A_1.fq.gz -2 ../dry_season/raw_data/Tor-2-1-A_2.fq.gz --no-unal -S Tor2_bin_1.sam
+bowtie2 --threads 50 -x Tor3_bin_1.fasta -1 ../dry_season/raw_data/Tor-3-1-A_1.fq.gz -2 ../dry_season/raw_data/Tor-3-1-A_2.fq.gz --no-unal -S Tor3_bin_1.sam
+bowtie2 --threads 50 -x Tru1_bin_1.fasta -1 ../dry_season/raw_data/Tru-1-1-A_1.fq.gz -2 ../dry_season/raw_data/Tru-1-1-A_2.fq.gz --no-unal -S Tru1_bin_1.sam
+bowtie2 --threads 50 -x Tru1_bin_2.fasta -1 ../dry_season/raw_data/Tru-1-1-A_1.fq.gz -2 ../dry_season/raw_data/Tru-1-1-A_2.fq.gz --no-unal -S Tru1_bin_2.sam
+bowtie2 --threads 50 -x Tru1_bin_3.fasta -1 ../dry_season/raw_data/Tru-1-1-A_1.fq.gz -2 ../dry_season/raw_data/Tru-1-1-A_2.fq.gz --no-unal -S Tru1_bin_3.sam
+bowtie2 --threads 50 -x Tru2_bin_1.fasta -1 ../dry_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../dry_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S Tru2_bin_1.sam
+bowtie2 --threads 50 -x Tru2_bin_2.fasta -1 ../dry_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../dry_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S Tru2_bin_2.sam
+bowtie2 --threads 50 -x Tru3_bin_1.fasta -1 ../dry_season/raw_data/Tru-3-1-A_1.fq.gz -2 ../dry_season/raw_data/Tru-3-1-A_2.fq.gz --no-unal -S Tru3_bin_1.sam
+bowtie2 --threads 50 -x Tru3_bin_2.fasta -1 ../dry_season/raw_data/Tru-3-1-A_1.fq.gz -2 ../dry_season/raw_data/Tru-3-1-A_2.fq.gz --no-unal -S Tru3_bin_2.sam
+
+#########
+
+bowtie2 --threads 50 -x W_C1_bin_1.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_1.sam
+bowtie2 --threads 50 -x W_C1_bin_2.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_2.sam
+bowtie2 --threads 50 -x W_C1_bin_3.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_3.sam
+bowtie2 --threads 50 -x W_C1_bin_4.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_4.sam
+bowtie2 --threads 50 -x W_C1_bin_5.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_5.sam
+bowtie2 --threads 50 -x W_C1_bin_6.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_6.sam
+bowtie2 --threads 50 -x W_C1_bin_7.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_7.sam
+bowtie2 --threads 50 -x W_C1_bin_8.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_8.sam
+bowtie2 --threads 50 -x W_C1_bin_9.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_9.sam
+bowtie2 --threads 50 -x W_C1_bin_10.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_10.sam
+bowtie2 --threads 50 -x W_C1_bin_11.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_11.sam
+bowtie2 --threads 50 -x W_C1_bin_12.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_12.sam
+bowtie2 --threads 50 -x W_C1_bin_13.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_13.sam
+bowtie2 --threads 50 -x W_C1_bin_14.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_14.sam
+bowtie2 --threads 50 -x W_C1_bin_15.fasta -1 ../wet_season/raw_data/C-1-1-A_1.fq.gz -2 ../wet_season/raw_data/C-1-1-A_2.fq.gz --no-unal -S W_C1_bin_15.sam
+bowtie2 --threads 50 -x W_C2_bin_1.fasta -1 ../wet_season/raw_data/C-2-1-A_1.fq.gz -2 ../wet_season/raw_data/C-2-1-A_2.fq.gz --no-unal -S W_C2_bin_1.sam
+bowtie2 --threads 50 -x W_C2_bin_2.fasta -1 ../wet_season/raw_data/C-2-1-A_1.fq.gz -2 ../wet_season/raw_data/C-2-1-A_2.fq.gz --no-unal -S W_C2_bin_2.sam
+bowtie2 --threads 50 -x W_C2_bin_3.fasta -1 ../wet_season/raw_data/C-2-1-A_1.fq.gz -2 ../wet_season/raw_data/C-2-1-A_2.fq.gz --no-unal -S W_C2_bin_3.sam
+bowtie2 --threads 50 -x W_C3_bin_1.fasta -1 ../wet_season/raw_data/C-3-1-A_1.fq.gz -2 ../wet_season/raw_data/C-3-1-A_2.fq.gz --no-unal -S W_C3_bin_1.sam
+bowtie2 --threads 50 -x W_Tru1_bin_1.fasta -1 ../wet_season/raw_data/Tru-1-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-1-1-A_2.fq.gz --no-unal -S W_Tru1_bin_1.sam
+bowtie2 --threads 50 -x W_Tru1_bin_2.fasta -1 ../wet_season/raw_data/Tru-1-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-1-1-A_2.fq.gz --no-unal -S W_Tru1_bin_2.sam
+bowtie2 --threads 50 -x W_Tru1_bin_3.fasta -1 ../wet_season/raw_data/Tru-1-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-1-1-A_2.fq.gz --no-unal -S W_Tru1_bin_3.sam
+bowtie2 --threads 50 -x W_Tru1_bin_4.fasta -1 ../wet_season/raw_data/Tru-1-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-1-1-A_2.fq.gz --no-unal -S W_Tru1_bin_4.sam
+bowtie2 --threads 50 -x W_Tru1_bin_5.fasta -1 ../wet_season/raw_data/Tru-1-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-1-1-A_2.fq.gz --no-unal -S W_Tru1_bin_5.sam
+bowtie2 --threads 50 -x W_Tru1_bin_6.fasta -1 ../wet_season/raw_data/Tru-1-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-1-1-A_2.fq.gz --no-unal -S W_Tru1_bin_6.sam
+bowtie2 --threads 50 -x W_Tru1_bin_7.fasta -1 ../wet_season/raw_data/Tru-1-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-1-1-A_2.fq.gz --no-unal -S W_Tru1_bin_7.sam
+bowtie2 --threads 50 -x W_Tru2_bin_1.fasta -1 ../wet_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S W_Tru2_bin_1.sam
+bowtie2 --threads 50 -x W_Tru2_bin_2.fasta -1 ../wet_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S W_Tru2_bin_2.sam
+bowtie2 --threads 50 -x W_Tru2_bin_3.fasta -1 ../wet_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S W_Tru2_bin_3.sam
+bowtie2 --threads 50 -x W_Tru2_bin_4.fasta -1 ../wet_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S W_Tru2_bin_4.sam
+bowtie2 --threads 50 -x W_Tru2_bin_5.fasta -1 ../wet_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S W_Tru2_bin_5.sam
+bowtie2 --threads 50 -x W_Tru2_bin_6.fasta -1 ../wet_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S W_Tru2_bin_6.sam
+bowtie2 --threads 50 -x W_Tru2_bin_7.fasta -1 ../wet_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S W_Tru2_bin_7.sam
+bowtie2 --threads 50 -x W_Tru2_bin_8.fasta -1 ../wet_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S W_Tru2_bin_8.sam
+bowtie2 --threads 50 -x W_Tru2_bin_9.fasta -1 ../wet_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S W_Tru2_bin_9.sam
+bowtie2 --threads 50 -x W_Tru2_bin_10.fasta -1 ../wet_season/raw_data/Tru-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-2-1-A_2.fq.gz --no-unal -S W_Tru2_bin_10.sam
+bowtie2 --threads 50 -x W_Tru3_bin_1.fasta -1 ../wet_season/raw_data/Tru-3-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-3-1-A_2.fq.gz --no-unal -S W_Tru3_bin_1.sam
+bowtie2 --threads 50 -x W_Tru3_bin_2.fasta -1 ../wet_season/raw_data/Tru-3-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-3-1-A_2.fq.gz --no-unal -S W_Tru3_bin_2.sam
+bowtie2 --threads 50 -x W_Tru3_bin_3.fasta -1 ../wet_season/raw_data/Tru-3-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-3-1-A_2.fq.gz --no-unal -S W_Tru3_bin_3.sam
+bowtie2 --threads 50 -x W_Tru3_bin_4.fasta -1 ../wet_season/raw_data/Tru-3-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-3-1-A_2.fq.gz --no-unal -S W_Tru3_bin_4.sam
+bowtie2 --threads 50 -x W_Tru3_bin_5.fasta -1 ../wet_season/raw_data/Tru-3-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-3-1-A_2.fq.gz --no-unal -S W_Tru3_bin_5.sam
+bowtie2 --threads 50 -x W_Tru3_bin_6.fasta -1 ../wet_season/raw_data/Tru-3-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-3-1-A_2.fq.gz --no-unal -S W_Tru3_bin_6.sam
+bowtie2 --threads 50 -x W_Tru3_bin_7.fasta -1 ../wet_season/raw_data/Tru-3-1-A_1.fq.gz -2 ../wet_season/raw_data/Tru-3-1-A_2.fq.gz --no-unal -S W_Tru3_bin_7.sam
+bowtie2 --threads 50 -x W_Tor1_bin_1.fasta -1 ../wet_season/raw_data/Tor-1-1-A_1.fq.gz -2 ../wet_season/raw_data/Tor-1-1-A_2.fq.gz --no-unal -S W_Tor1_bin_1.sam
+bowtie2 --threads 50 -x W_Tor1_bin_2.fasta -1 ../wet_season/raw_data/Tor-1-1-A_1.fq.gz -2 ../wet_season/raw_data/Tor-1-1-A_2.fq.gz --no-unal -S W_Tor1_bin_2.sam
+bowtie2 --threads 50 -x W_Tor1_bin_3.fasta -1 ../wet_season/raw_data/Tor-1-1-A_1.fq.gz -2 ../wet_season/raw_data/Tor-1-1-A_2.fq.gz --no-unal -S W_Tor1_bin_3.sam
+bowtie2 --threads 50 -x W_Tor2_bin_1.fasta -1 ../wet_season/raw_data/Tor-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tor-2-1-A_2.fq.gz --no-unal -S W_Tor2_bin_1.sam
+bowtie2 --threads 50 -x W_Tor2_bin_2.fasta -1 ../wet_season/raw_data/Tor-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tor-2-1-A_2.fq.gz --no-unal -S W_Tor2_bin_2.sam
+bowtie2 --threads 50 -x W_Tor2_bin_3.fasta -1 ../wet_season/raw_data/Tor-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tor-2-1-A_2.fq.gz --no-unal -S W_Tor2_bin_3.sam
+bowtie2 --threads 50 -x W_Tor2_bin_4.fasta -1 ../wet_season/raw_data/Tor-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tor-2-1-A_2.fq.gz --no-unal -S W_Tor2_bin_4.sam
+bowtie2 --threads 50 -x W_Tor2_bin_5.fasta -1 ../wet_season/raw_data/Tor-2-1-A_1.fq.gz -2 ../wet_season/raw_data/Tor-2-1-A_2.fq.gz --no-unal -S W_Tor2_bin_5.sam
+bowtie2 --threads 50 -x W_Tor3_bin_1.fasta -1 ../wet_season/raw_data/Tor-3-1-A_1.fq.gz -2 ../wet_season/raw_data/Tor-3-1-A_2.fq.gz --no-unal -S W_Tor3_bin_1.sam
+bowtie2 --threads 50 -x W_Bra1_bin_1.fasta -1 ../../wet_season/raw_data/Bra-1-1A_1.fq.gz -2 ../../wet_season/raw_data/Bra-1-1A_2.fq.gz --no-unal -S W_Bra1_bin_1.sam
+bowtie2 --threads 50 -x W_Bra1_bin_2.fasta -1 ../../wet_season/raw_data/Bra-1-1A_1.fq.gz -2 ../../wet_season/raw_data/Bra-1-1A_2.fq.gz --no-unal -S W_Bra1_bin_2.sam
+bowtie2 --threads 50 -x W_Bra2_bin_1.fasta -1 ../../wet_season/raw_data/Bra-2-1A_1.fq.gz -2 ../../wet_season/raw_data/Bra-2-1A_2.fq.gz --no-unal -S W_Bra2_bin_1.sam
+bowtie2 --threads 50 -x W_Bra2_bin_2.fasta -1 ../../wet_season/raw_data/Bra-2-1A_1.fq.gz -2 ../../wet_season/raw_data/Bra-2-1A_2.fq.gz --no-unal -S W_Bra2_bin_2.sam
+bowtie2 --threads 50 -x W_Bra2_bin_3.fasta -1 ../../wet_season/raw_data/Bra-2-1A_1.fq.gz -2 ../../wet_season/raw_data/Bra-2-1A_2.fq.gz --no-unal -S W_Bra2_bin_3.sam
+bowtie2 --threads 50 -x W_Bra2_bin_4.fasta -1 ../../wet_season/raw_data/Bra-2-1A_1.fq.gz -2 ../../wet_season/raw_data/Bra-2-1A_2.fq.gz --no-unal -S W_Bra2_bin_4.sam
+bowtie2 --threads 50 -x W_Bra2_bin_5.fasta -1 ../../wet_season/raw_data/Bra-2-1A_1.fq.gz -2 ../../wet_season/raw_data/Bra-2-1A_2.fq.gz --no-unal -S W_Bra2_bin_5.sam
+bowtie2 --threads 50 -x W_Bra3_bin_1.fasta -1 ../../wet_season/raw_data/Bra-3-1A_1.fq.gz -2 ../../wet_season/raw_data/Bra-3-1A_2.fq.gz --no-unal -S W_Bra3_bin_1.sam
+
+
+
+diego.franco@fsm:~/islands$ anvi-interactive -t GTDB_MAGs.tree -d bins_summary_filtered.txt -p some.db --manual-mode
+
+
+for sample in `awk '{print $1}' samples.txt`
+do
+    if [ "$sample" == "sample" ]; then continue; fi
+prokka $sample.fasta --outdir $sample_prokka --prefix $sample --metagenome --cpus 60
+done
+
+
+for sample in `awk '{print $1}' samples.txt`
+do
+    if [ "$sample" == "sample" ]; then continue; fi
+interproscan.sh -i $sample.fasta -f tsv, GFF3, SVG -b $sample._interproscan -t n -cpu 20
+done
+
+
+
+for KO in K10944 K10945 K10946 K10535; do exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/$KO.hmm --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20 | grep ^* > islands/KOFAM_SCAN/$KO.txt; done
+exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/K10944.hmm --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20
+exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/K10944.hmm --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20  | grep ^* > K10944.txt
+more K10944.txt
+exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/K10944.hmm --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20
+exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/K1094 --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20 | grep ^* > islands/KOFAM_SCAN/$KO.txt; done
+exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/K1094 --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20 | grep ^* > islands/KOFAM_SCAN/$KO.txt
+exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/K1094 --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20
+exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/K10940.hmm --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20
+exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/K10944.hmm --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20
+exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/K00368.hmm --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20
+exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/K15864.hmm --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20
+exec_annotation -h
+exec_annotation Bra1_aa.fa --profile ~/kofam/profiles/ --ko-list ~/kofam/ko_list --format detail-tsv --cpu 20
+
+for KO in K00368 K15864 K04561 K00376; do   exec_annotation MAGs/gene_calls.faa                   --profile $KOFAM_DB_DIR/profiles/$KO.hmm                   --ko-list $KOFAM_DB_DIR/ko_list                >
+for KO in K00368 K15864 K04561 K00376; do   exec_annotation MAGs/gene_calls.faa                   --profile ~/kofam/profiles/$KO.hmm                   --ko-list ~/kofam/ko_list                   --format >
+
+for KO in K00368 K15864 K04561 K00376; do   exec_annotation Bra1_aa.fa                   --profile ~/kofam/profiles/$KO.hmm                   --ko-list ~/kofam/ko_list                   --format detail-ts>
+
+for KO in K10944 K10945 K10946 K10535; do   exec_annotation Bra1_aa.fa                   --profile ~/kofam/profiles/$KO.hmm                   --ko-list ~/kofam/ko_list                   --format detail-ts>
+
+for KO in K00367 K10534 K00372 K00360 K00366 K17877; do   exec_annotation Bra1_aa.fa                   --profile ~/kofam/profiles/$KO.hmm                   --ko-list ~/kofam/ko_list                   --fo>
+
+for KO in K00367 K10534 K00372 K00360 K00366 K17877; do   exec_annotation Bra1_aa.fa                   --profile ~/kofam/profiles/$KO.hmm                   --ko-list ~/kofam/ko_list                   --fo>
+for KO in K00367 K10534 K00372 K00360 K00366 K17877; do   final_mags-aa.fa                   --profile ~/kofam/profiles/$KO.hmm                   --ko-list ~/kofam/ko_list                   --format detai>
+for KO in K00367 K10534 K00372 K00360 K00366 K17877; do   exec_annotation *aa.fa                   --profile ~/kofam/profiles/$KO.hmm                   --ko-list ~/kofam/ko_list                   --format>
+more KO*
+more K0*
+more final_mags-aa.fa
+more K0*
+python3 -m pip install KEGGDecoder
+pip install --upgrade KEGGDecoder
+exec_annotation -f mapper -o out.txt final_mags-aa.fa
+exec_annotation -h
+exec_annotation -f mapper -o out.txt final_mags-aa.fa
+exec_annotation -f mapper -o out.txt final_mags-aa.fa -k ~/kofam/ko_list -p ~/kofam/profiles/
+exec_annotation -f mapper -o out.txt final_mags-aa.fa -k ~/kofam/ko_list -p ~/kofam/profiles/ --cpus 40
+exec_annotation -f mapper -o out.txt final_mags-aa.fa -k ~/kofam/ko_list -p ~/kofam/profiles/ --cpu 40
+more out.txt
+KEGG-decoder -i out.txt -o out.list -v interactive
+KEGG-decoder -i out.txt -o out.list -v tanglegram
+
+
+
+
+pileup.sh in=megahit.sam  out=cov.txt
+awk '{print $1"\t"$5}' cov.txt | grep -v '^#' > abundance.txt
